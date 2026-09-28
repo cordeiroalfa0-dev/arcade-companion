@@ -14,7 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      mga_saves: {
+        Row: {
+          core: string
+          date_str: string | null
+          preview: string | null
+          rom: string
+          saved_at: number
+          state_b64: string
+          user_id: string
+        }
+        Insert: {
+          core: string
+          date_str?: string | null
+          preview?: string | null
+          rom: string
+          saved_at: number
+          state_b64: string
+          user_id: string
+        }
+        Update: {
+          core?: string
+          date_str?: string | null
+          preview?: string | null
+          rom?: string
+          saved_at?: number
+          state_b64?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
