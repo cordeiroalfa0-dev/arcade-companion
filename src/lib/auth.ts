@@ -96,7 +96,7 @@ export function createOAuthStateCookie(): { cookie: string; state: string } {
 export function readOAuthStateCookie(request: Request): string | null {
   const cookieHeader = request.headers.get("cookie") || "";
   const match = cookieHeader.match(new RegExp(`${STATE_COOKIE_NAME}=([^;]+)`));
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 export function clearOAuthStateCookie(): string {

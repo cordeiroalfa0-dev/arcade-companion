@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createOAuthStateCookie } from "../../../lib/auth";
 
 async function startGoogleLogin({ request }: { request: Request }) {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientId = process.env["GOOGLE_CLIENT_ID"];
   if (!clientId) {
     const origin = new URL(request.url).origin;
     return new Response(null, {

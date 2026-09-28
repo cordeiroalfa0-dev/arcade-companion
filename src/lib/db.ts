@@ -2,9 +2,9 @@ import { neon } from "@neondatabase/serverless";
 
 function getConnectionString(): string {
   const url =
-    process.env.POSTGRES_URL ||
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL_NON_POOLING;
+    process.env["POSTGRES_URL"] ||
+    process.env["DATABASE_URL"] ||
+    process.env["POSTGRES_URL_NON_POOLING"];
   if (!url) {
     throw new Error(
       "Banco de dados não conectado. Crie um Postgres na aba Storage do projeto na Vercel " +

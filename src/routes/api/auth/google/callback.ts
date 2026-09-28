@@ -37,8 +37,8 @@ async function handleCallback({ request }: { request: Request }) {
     return errorPage("Sessão de login expirada ou inválida. Volte e tente novamente.");
   }
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = process.env["GOOGLE_CLIENT_ID"];
+  const clientSecret = process.env["GOOGLE_CLIENT_SECRET"];
   if (!clientId || !clientSecret) {
     return errorPage(
       "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET não configurados nas variáveis de ambiente da Vercel.",
@@ -85,13 +85,13 @@ async function handleCallback({ request }: { request: Request }) {
       DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name, avatar_url = EXCLUDED.avatar_url
       RETURNING id
     `;
-    const uid = (rows[0] as { id: string }).id;
+    const uid = (rows as { id: string }[])[0]!.id;
 
     const sessionCookie = await createSessionCookie({
       uid,
       email: profile.email,
-      name: profile.name,
-      picture: profile.picture,
+      name: profile.name ?? "",
+      picture: profile.picture ?? "",
     });
 
     return redirectHome(origin, [sessionCookie, clearOAuthStateCookie()]);

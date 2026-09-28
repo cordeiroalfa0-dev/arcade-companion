@@ -34,13 +34,13 @@ async function get({ request }: { request: Request }) {
     FROM mga_saves
     WHERE user_id = ${session.uid} AND rom = ${rom} AND core = ${core}
   `;
-  const row = rows[0] as Record<string, unknown> | undefined;
+  const row = (rows as Record<string, unknown>[])[0];
   const save: SaveEntry | null = row
     ? {
-        stateB64: row.state_b64 as string,
-        preview: (row.preview as string) || "",
-        savedAt: Number(row.saved_at),
-        dateStr: (row.date_str as string) || "",
+        stateB64: row["state_b64"] as string,
+        preview: (row["preview"] as string) || "",
+        savedAt: Number(row["saved_at"]),
+        dateStr: (row["date_str"] as string) || "",
       }
     : null;
   return json({ ok: true, save });
