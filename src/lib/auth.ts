@@ -8,7 +8,7 @@ const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 dias
 
 function b64urlEncode(bytes: Uint8Array): string {
   let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
@@ -22,7 +22,7 @@ function b64urlDecode(str: string): Uint8Array {
 }
 
 function getSecret(): string {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env["JWT_SECRET"];
   if (!secret) {
     throw new Error(
       "JWT_SECRET não configurado. Vá em Settings → Environment Variables no projeto da " +
@@ -73,7 +73,7 @@ export async function readSession(request: Request): Promise<SessionPayload | nu
     const cookieHeader = request.headers.get("cookie") || "";
     const match = cookieHeader.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
     if (!match) return null;
-    const [body, sig] = match[1].split(".");
+    const [body, sig] = match[1]!.split(".");
     if (!body || !sig) return null;
     const expected = await hmacSign(body);
     if (expected !== sig) return null;
