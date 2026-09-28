@@ -409,7 +409,7 @@ function GameCard({
   onToggleFavorite,
 }: {
   title: string;
-  snapUrl?: string;
+  snapUrl?: string | undefined;
   isFavorite: boolean;
   isLaunching: boolean;
   onPlay: () => void;
