@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { GameLibrary } from "@/components/GameLibrary";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -39,22 +41,33 @@ function Index() {
     }
 
     let cancelled = false;
-    fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        if (data?.ok) {
-          setUser(data.user as MgaUser);
-          setAuthState("authed");
-        } else {
-          setAuthState("guest");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setAuthState("guest");
-      });
+    const refresh = async () => {
+      // Se voltou do login Google, troca a sessão da nuvem pelo cookie do app.
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: data.session.access_token }),
+        }).catch(() => {});
+      }
+      const res = await fetch("/api/auth/me").catch(() => null);
+      const me = res && res.ok ? await res.json() : null;
+      if (cancelled) return;
+      if (me?.ok) {
+        setUser(me.user as MgaUser);
+        setAuthState("authed");
+      } else {
+        setAuthState("guest");
+      }
+    };
+    refresh();
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") refresh();
+    });
     return () => {
       cancelled = true;
+      sub.subscription.unsubscribe();
     };
   }, []);
 
@@ -80,6 +93,7 @@ function Index() {
 function Launcher({ user, onLogout }: { user: MgaUser | null; onLogout: () => void }) {
   const logout = async () => {
     try {
+      await supabase.auth.signOut();
       await fetch("/api/auth/logout", { method: "POST" });
     } catch {
       // segue o logout local mesmo se a chamada falhar
@@ -111,8 +125,11 @@ function Launcher({ user, onLogout }: { user: MgaUser | null; onLogout: () => vo
       <span>Modo convidado · saves locais</span>
       <button
         type="button"
-        onClick={() => {
-          window.location.href = "/api/auth/google";
+        onClick={async () => {
+          const result = await lovable.auth.signInWithOAuth("google", {
+            redirect_uri: `${window.location.origin}/?launcher=1`,
+          });
+          if (result.error) alert("Não foi possível entrar com o Google.");
         }}
         className="rounded border border-cyan-500/50 px-1.5 py-0.5 text-cyan-300 hover:bg-cyan-400/10"
       >
