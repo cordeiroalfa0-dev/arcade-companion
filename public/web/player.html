@@ -1327,8 +1327,12 @@
     }finally{clearTimeout(cloudTimeout)}
   };
   const readCloudSave=async()=>{
+    let cloudTimeout;
     try{
-      const response=await fetch(cloudUrl,{credentials:'same-origin'});
+      // Uma API remota lenta não deve impedir a retomada do save local.
+      const controller=new AbortController();
+      cloudTimeout=setTimeout(()=>controller.abort(),6000);
+      const response=await fetch(cloudUrl,{credentials:'same-origin',signal:controller.signal});
       if(response.status===401){cloudAvailable=false;return null}
       if(!response.ok){cloudAvailable=false;return null}
       const data=await response.json();
@@ -1339,9 +1343,9 @@
       return {state,stateSize:state.byteLength,savedAt:Number(remote.savedAt)||0,dateStr:remote.dateStr||'',preview:remote.preview||''};
     }catch(e){
       cloudAvailable=false;
-      log('Nuvem indisponível ao carregar; usando save local');
+      log('Nuvem indisponível/timeout ao carregar; usando save local');
       return null;
-    }
+    }finally{clearTimeout(cloudTimeout)}
   };
 
   const saveToSlot=async(slot,silent=false)=>{
@@ -1392,12 +1396,18 @@
   // O carregamento só funciona depois que o core realmente iniciou a ROM.
   // Antes disso o loadState era descartado em silêncio e a partida sumia.
   const waitForGameReady=async(timeout=25000)=>{
+    const coreCanLoad=()=>{
+      const manager=window.EJS_emulator?.gameManager;
+      // O método público loadState existe antes do core estar pronto. A
+      // restauração precisa também do FS e do cwrap nativo usados abaixo.
+      return !!(started&&manager?.FS?.writeFile&&manager?.functions?.loadState);
+    };
     const deadline=Date.now()+timeout;
     while(Date.now()<deadline){
-      if(started&&window.EJS_emulator?.gameManager?.loadState)return true;
+      if(coreCanLoad())return true;
       await mgaSleep(250);
     }
-    return !!(started&&window.EJS_emulator?.gameManager?.loadState);
+    return coreCanLoad();
   };
 
   // Se o jogo estiver pausado, o core não processa o estado restaurado.
