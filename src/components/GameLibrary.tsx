@@ -46,6 +46,78 @@ const BACKGROUND_IMAGES = [
 
 const fileBase = (name: string) => name.toLowerCase().replace(/\.(zip|7z|chd)$/i, "");
 
+type LocalCheckpoint = { rom: string; savedAt: number };
+
+async function findLatestLocalCheckpoint(): Promise<LocalCheckpoint | null> {
+  if (typeof window === "undefined" || !window.indexedDB) return null;
+
+  return new Promise((resolve) => {
+    let db: IDBDatabase | null = null;
+    let settled = false;
+    let latest: LocalCheckpoint | null = null;
+    const finish = (value: LocalCheckpoint | null) => {
+      if (settled) return;
+      settled = true;
+      db?.close();
+      resolve(value);
+    };
+
+    try {
+      const request = window.indexedDB.open("mga-progress-v1", 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains("states")) {
+          request.result.createObjectStore("states");
+        }
+      };
+      request.onerror = () => finish(null);
+      request.onsuccess = () => {
+        db = request.result;
+        if (!db.objectStoreNames.contains("states")) return finish(null);
+
+        try {
+          const transaction = db.transaction("states", "readonly");
+          const cursorRequest = transaction.objectStore("states").openCursor();
+          transaction.onerror = () => finish(latest);
+          transaction.onabort = () => finish(latest);
+          cursorRequest.onerror = () => finish(latest);
+          cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result;
+            if (!cursor) return finish(latest);
+
+            const key = String(cursor.key);
+            const record = cursor.value as {
+              rom?: unknown;
+              savedAt?: unknown;
+              state?: unknown;
+            };
+            const bytes = record?.state;
+            const stateSize =
+              bytes instanceof ArrayBuffer
+                ? bytes.byteLength
+                : ArrayBuffer.isView(bytes)
+                  ? bytes.byteLength
+                  : 0;
+            const savedAt = Number(record?.savedAt) || 0;
+            if (
+              !key.includes(":slot_") &&
+              typeof record?.rom === "string" &&
+              stateSize > 0 &&
+              savedAt > (latest?.savedAt || 0)
+            ) {
+              latest = { rom: record.rom.toLowerCase(), savedAt };
+            }
+            cursor.continue();
+          };
+        } catch {
+          finish(null);
+        }
+      };
+    } catch {
+      finish(null);
+    }
+  });
+}
+
 const prettyFallback = (name: string) =>
   fileBase(name)
     .replace(/[-_]+/g, " ")
@@ -54,7 +126,7 @@ const prettyFallback = (name: string) =>
 async function waitForBridge(): Promise<void> {
   await new Promise<void>((resolve) => {
     const script = document.createElement("script");
-    script.src = "/web/mame-web.js?v=universal-controls-20260926-v3";
+    script.src = "/web/mame-web.js?v=reliable-save-resume-20260929-v1";
     script.onload = () => resolve();
     script.onerror = () => resolve();
     document.head.appendChild(script);
@@ -69,6 +141,9 @@ export function GameLibrary({ accountSlot }: { accountSlot?: React.ReactNode }) 
   const [media, setMedia] = useState<Record<string, MediaEntry>>({});
   const [favorites, setFavorites] = useState<string[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
+  const [resumeGame, setResumeGame] = useState<{ rom: string; savedAt: number | null } | null>(
+    null,
+  );
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("all");
   const [launching, setLaunching] = useState<string | null>(null);
@@ -132,12 +207,27 @@ export function GameLibrary({ accountSlot }: { accountSlot?: React.ReactNode }) 
       const favData = favRes.ok ? await favRes.json() : { games: [] };
       const recentData = recentRes.ok ? await recentRes.json() : { games: [] };
       const mediaData = mediaRes && mediaRes.ok ? await mediaRes.json() : {};
+      const latestCheckpoint = await findLatestLocalCheckpoint();
+      const availableRoms: string[] = Array.isArray(romsData.roms) ? romsData.roms : [];
+      const recentGames: string[] = Array.isArray(recentData.games) ? recentData.games : [];
+      const checkpointRom = latestCheckpoint
+        ? availableRoms.find((rom) => fileBase(rom) === latestCheckpoint.rom)
+        : undefined;
+      const resumeRom = checkpointRom || recentGames[0] || null;
 
       if (!mountedRef.current) return;
-      setRoms(Array.isArray(romsData.roms) ? romsData.roms : []);
+      setRoms(availableRoms);
       setNames(namesData.names || {});
       setFavorites(Array.isArray(favData.games) ? favData.games : []);
-      setRecent(Array.isArray(recentData.games) ? recentData.games : []);
+      setRecent(recentGames);
+      setResumeGame(
+        resumeRom
+          ? {
+              rom: resumeRom,
+              savedAt: checkpointRom ? latestCheckpoint?.savedAt || null : null,
+            }
+          : null,
+      );
       setMedia(mediaData || {});
       setPhase("ready");
     } catch (err) {
@@ -149,8 +239,28 @@ export function GameLibrary({ accountSlot }: { accountSlot?: React.ReactNode }) 
 
   useEffect(() => {
     loadLibrary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const refreshResumeGame = async () => {
+      const latestCheckpoint = await findLatestLocalCheckpoint();
+      const checkpointRom = latestCheckpoint
+        ? roms.find((rom) => fileBase(rom) === latestCheckpoint.rom)
+        : undefined;
+      const resumeRom = checkpointRom || recent[0] || null;
+      setResumeGame(
+        resumeRom
+          ? {
+              rom: resumeRom,
+              savedAt: checkpointRom ? latestCheckpoint?.savedAt || null : null,
+            }
+          : null,
+      );
+    };
+    const handleSaveComplete = () => void refreshResumeGame();
+    window.addEventListener("mga-save-complete", handleSaveComplete);
+    return () => window.removeEventListener("mga-save-complete", handleSaveComplete);
+  }, [roms, recent]);
 
   const titleFor = (rom: string) => names[fileBase(rom)] || prettyFallback(rom);
 
@@ -333,6 +443,33 @@ export function GameLibrary({ accountSlot }: { accountSlot?: React.ReactNode }) 
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+            {phase === "ready" && resumeGame && !query.trim() && (
+              <button
+                type="button"
+                onClick={() => playGame(resumeGame.rom)}
+                disabled={Boolean(launching)}
+                aria-label={`Continuar ${titleFor(resumeGame.rom)}`}
+                className="mb-4 flex w-full items-center gap-3 rounded-xl border border-amber-400/45 bg-amber-400/10 p-3 text-left transition-colors hover:bg-amber-400/15 disabled:cursor-wait disabled:opacity-60"
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-amber-300/50 bg-black/30 text-amber-200">
+                  <Play className="h-4 w-4 fill-current" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-mono text-[10px] font-bold tracking-wider text-amber-200">
+                    CONTINUAR PARTIDA
+                  </span>
+                  <span className="block truncate font-mono text-sm font-bold text-white">
+                    {titleFor(resumeGame.rom)}
+                  </span>
+                  <span className="block font-mono text-[10px] text-zinc-300">
+                    {resumeGame.savedAt
+                      ? `Checkpoint confirmado ${new Date(resumeGame.savedAt).toLocaleString("pt-BR")}`
+                      : "Abrir o último jogo e procurar um checkpoint disponível"}
+                  </span>
+                </span>
+              </button>
+            )}
+
             {phase === "loading" && <LibrarySkeleton expanded={isWindowExpanded} />}
 
             {phase === "error" && (

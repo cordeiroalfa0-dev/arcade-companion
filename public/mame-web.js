@@ -235,7 +235,7 @@
     playerUrl.searchParams.set("name", cleanRomName(romName));
     // O player é alterado junto com o bridge; versionar a URL evita que o
     // navegador reutilize uma versão antiga que ainda exibia o menu RetroArch.
-    playerUrl.searchParams.set("v", "20260926-zip-auto-start-v4");
+    playerUrl.searchParams.set("v", "20260929-reliable-save-resume-v1");
     if (biosUrl) playerUrl.searchParams.set("bios", biosUrl);
     if (biosName) playerUrl.searchParams.set("biosName", biosName);
 
@@ -268,7 +268,7 @@
           message.textContent = "O salvamento demorou. Tente novamente ou saia sem salvar.";
           closeInProgress = false;
         }
-      }, 10000);
+      }, 35000);
     };
 
     const closePlayer = () => {
@@ -305,7 +305,12 @@
         closePlayer();
       }
 
+      if (event.data?.type === "mga-emulator-checkpoint-saved") {
+        window.dispatchEvent(new Event("mga-save-complete"));
+      }
+
       if (event.data?.type === "mga-emulator-save-complete") {
+        window.dispatchEvent(new Event("mga-save-complete"));
         finishClose();
       }
 
