@@ -234,8 +234,8 @@
     playerUrl.searchParams.set("rom", romUrl);
     playerUrl.searchParams.set("name", cleanRomName(romName));
     // O player é alterado junto com o bridge; versionar a URL evita que o
-    // navegador reutilize uma versão antiga que ainda exibia o menu RetroArch.
-    playerUrl.searchParams.set("v", "20260926-universal-controls-v13");
+    // navegador reutilize uma versão antiga da rotina de restauração.
+    playerUrl.searchParams.set("v", "20260929-game-manager-load-state-v1");
     if (biosUrl) playerUrl.searchParams.set("bios", biosUrl);
     if (biosName) playerUrl.searchParams.set("biosName", biosName);
 
