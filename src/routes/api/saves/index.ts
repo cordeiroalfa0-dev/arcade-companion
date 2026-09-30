@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { readSession } from "../../../lib/auth";
+import { isSameOriginRequest, readSession } from "../../../lib/auth";
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -47,6 +47,7 @@ async function get({ request }: { request: Request }) {
 }
 
 async function upsert({ request }: { request: Request }) {
+  if (!isSameOriginRequest(request)) return json({ ok: false, error: "Origem inválida." }, 403);
   const session = await readSession(request);
   if (!session) return json({ ok: false, error: "Não autenticado." }, 401);
 
@@ -78,6 +79,7 @@ async function upsert({ request }: { request: Request }) {
 }
 
 async function remove({ request }: { request: Request }) {
+  if (!isSameOriginRequest(request)) return json({ ok: false, error: "Origem inválida." }, 403);
   const session = await readSession(request);
   if (!session) return json({ ok: false, error: "Não autenticado." }, 401);
 

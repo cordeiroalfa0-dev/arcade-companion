@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { createSessionCookie } from "../../../lib/auth";
+import { createSessionCookie, isSameOriginRequest } from "../../../lib/auth";
 
 // Recebe o token do login Google (Lovable Cloud), valida no servidor e cria
 // o cookie de sessão usado pelo player para sincronizar saves.
 async function createSession({ request }: { request: Request }) {
+  if (!isSameOriginRequest(request)) {
+    return new Response(JSON.stringify({ ok: false }), { status: 403 });
+  }
   const body = (await request.json().catch(() => null)) as { access_token?: string } | null;
   const token = body?.access_token;
   if (!token) return new Response(JSON.stringify({ ok: false }), { status: 400 });
