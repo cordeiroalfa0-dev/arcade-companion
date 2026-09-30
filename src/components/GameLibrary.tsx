@@ -126,7 +126,7 @@ const prettyFallback = (name: string) =>
 async function waitForBridge(): Promise<void> {
   await new Promise<void>((resolve) => {
     const script = document.createElement("script");
-    script.src = "/web/mame-web.js?v=rolling-save-backup-20260929-v3";
+    script.src = "/web/mame-web.js?v=save-confirmed-20260929-v4";
     script.onload = () => resolve();
     script.onerror = () => resolve();
     document.head.appendChild(script);

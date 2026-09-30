@@ -235,7 +235,7 @@
     playerUrl.searchParams.set("name", cleanRomName(romName));
     // O player é alterado junto com o bridge; versionar a URL evita que o
     // navegador reutilize uma versão antiga da rotina de restauração.
-    playerUrl.searchParams.set("v", "rolling-save-backup-20260929-v1");
+    playerUrl.searchParams.set("v", "save-confirmed-20260929-v2");
     if (biosUrl) playerUrl.searchParams.set("bios", biosUrl);
     if (biosName) playerUrl.searchParams.set("biosName", biosName);
 
@@ -262,6 +262,16 @@
         if (document.fullscreenElement) document.exitFullscreen?.().catch?.(() => {});
       } catch {}
       try { screen.orientation?.unlock?.(); } catch {}
+    };
+
+    const announceSave = (text) => {
+      const notice = document.createElement("div");
+      notice.setAttribute("role", "status");
+      notice.textContent = text;
+      notice.style.cssText =
+        "position:fixed;z-index:2147483647;left:50%;top:max(16px,env(safe-area-inset-top));transform:translateX(-50%);width:min(680px,calc(100vw - 32px));box-sizing:border-box;padding:14px 18px;border:1px solid #00e5ff88;border-radius:8px;background:#080012;color:#fff;box-shadow:0 0 20px #00e5ff44;font:bold 13px monospace;text-align:center;line-height:1.5;";
+      document.body.appendChild(notice);
+      window.setTimeout(() => notice.remove(), 6500);
     };
 
     const requestSaveAndClose = () => {
@@ -353,7 +363,38 @@
       }
 
       if (event.data?.type === "mga-emulator-save-complete") {
+        window.dispatchEvent(new CustomEvent("mga-save-complete"));
+        const saveMessage = event.data.message || "Save confirmado neste aparelho.";
         finishClose();
+        announceSave(saveMessage);
+      }
+
+      if (event.data?.type === "mga-emulator-cloud-save-failed") {
+        closeInProgress = false;
+        message.style.display = "grid";
+        message.style.pointerEvents = "auto";
+        message.innerHTML = "";
+        const box = document.createElement("div");
+        box.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:14px;max-width:520px;line-height:1.5;";
+        const text = document.createElement("div");
+        text.textContent = event.data.message || "O save local foi confirmado, mas a nuvem não confirmou o backup.";
+        const actions = document.createElement("div");
+        actions.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;justify-content:center;";
+        const retry = document.createElement("button");
+        retry.textContent = "Tentar sincronizar novamente";
+        retry.style.cssText = "padding:10px 14px;background:#08000f;border:1px solid #00e5ff;color:#00e5ff;font:bold 12px monospace;cursor:pointer;";
+        retry.onclick = requestSaveAndClose;
+        const exit = document.createElement("button");
+        exit.textContent = "Sair com o save local";
+        exit.style.cssText = "padding:10px 14px;background:#08000f;border:1px solid #ffbb00;color:#ffdf75;font:bold 12px monospace;cursor:pointer;";
+        exit.onclick = () => {
+          window.dispatchEvent(new CustomEvent("mga-save-complete"));
+          finishClose();
+          announceSave("Save confirmado neste aparelho. Nuvem não confirmada; não apague os dados do navegador.");
+        };
+        actions.append(retry, exit);
+        box.append(text, actions);
+        message.appendChild(box);
       }
 
       if (event.data?.type === "mga-emulator-save-failed") {
