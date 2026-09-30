@@ -1201,6 +1201,7 @@
   const MGA_SAVE_DB='mga-progress-v1';
   const MGA_SAVE_STORE='states';
   const MGA_SAVE_KEY=`${romBase}:${core}`;
+  const MGA_SAVE_BACKUP_KEY=`${MGA_SAVE_KEY}:backup`;
   const MGA_TOTAL_SLOTS=15;
   let mgaSaveTimer=null;
   let mgaSaveBusy=false;
@@ -1238,11 +1239,27 @@
     try{return await task(db)}finally{db.close()}
   };
 
-  const putAndVerifyRecord=async(db,key,record)=>{
+  const putAndVerifyRecord=async(db,key,record,backupKey='')=>{
     await new Promise((resolve,reject)=>{
       const tx=db.transaction(MGA_SAVE_STORE,'readwrite');
-      tx.objectStore(MGA_SAVE_STORE).put(record,key);
-      tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+      const store=tx.objectStore(MGA_SAVE_STORE);
+      const fail=error=>reject(error||tx.error||new Error('Falha na transação do save'));
+      tx.oncomplete=resolve;tx.onerror=()=>fail(tx.error);tx.onabort=()=>fail(tx.error);
+      const writeCurrent=()=>{
+        try{store.put(record,key)}catch(e){try{tx.abort()}catch{}fail(e)}
+      };
+      if(backupKey){
+        const previous=store.get(key);
+        previous.onsuccess=()=>{
+          try{
+            if(isValidSavedRecord(previous.result)){
+              store.put({...previous.result,preview:''},backupKey);
+            }
+            writeCurrent();
+          }catch(e){try{tx.abort()}catch{}fail(e)}
+        };
+        previous.onerror=()=>fail(previous.error);
+      }else writeCurrent();
     });
     const persisted=await new Promise((resolve,reject)=>{
       const req=db.transaction(MGA_SAVE_STORE,'readonly').objectStore(MGA_SAVE_STORE).get(key);
@@ -1555,7 +1572,16 @@
       const now=Date.now();
       const dateStr=new Date(now).toLocaleString('pt-BR');
       const record={state,stateSize:state.byteLength,savedAt:now,dateStr,rom:romBase,core,preview:captureMomentImage()};
-      await withProgressDb(db=>putAndVerifyRecord(db,MGA_SAVE_KEY,record));
+      await withProgressDb(async db=>{
+        try{
+          await putAndVerifyRecord(db,MGA_SAVE_KEY,record,MGA_SAVE_BACKUP_KEY);
+        }catch(backupError){
+          // Se o backup não couber no armazenamento ou falhar por outro
+          // motivo, priorize gravar o checkpoint atual sem a cópia anterior.
+          log('Backup local não atualizado; tentando salvar só o checkpoint atual ('+(backupError?.message||backupError)+')');
+          await putAndVerifyRecord(db,MGA_SAVE_KEY,record);
+        }
+      });
       if(!silent){
         try{parent.postMessage({type:'mga-emulator-checkpoint-saved',rom:romBase,savedAt:now},location.origin)}catch{}
         showToast('✅ Checkpoint salvo neste aparelho');
@@ -1600,14 +1626,34 @@
     mgaInitialLoadStarted=true;
     mgaLoadBusy=true;
     try{
-      const localSaved=await readSlotRecord(MGA_SAVE_KEY);
+      const readLocalRecord=async key=>{
+        try{return await readSlotRecord(key)}
+        catch(e){log('Save local indisponível para '+key+' ('+(e?.message||e)+')');return null}
+      };
+      const localSaved=await readLocalRecord(MGA_SAVE_KEY);
+      const backupSaved=await readLocalRecord(MGA_SAVE_BACKUP_KEY);
+      const recoverableLocal=isValidSavedRecord(localSaved)?localSaved:backupSaved;
       const cloudSaved=await readCloudSave();
-      const saved=isValidSavedRecord(cloudSaved)&&(!isValidSavedRecord(localSaved)||cloudSaved.savedAt>localSaved.savedAt)
-        ? cloudSaved : localSaved;
+      const saved=isValidSavedRecord(cloudSaved)&&(!isValidSavedRecord(recoverableLocal)||cloudSaved.savedAt>recoverableLocal.savedAt)
+        ? cloudSaved : recoverableLocal;
       if(!isValidSavedRecord(saved))return false;
       if(saved===cloudSaved){
-        await withProgressDb(db=>putAndVerifyRecord(db,MGA_SAVE_KEY,saved));
-        log('Save da nuvem baixado para este dispositivo');
+        try{
+          await withProgressDb(async db=>{
+            try{await putAndVerifyRecord(db,MGA_SAVE_KEY,saved,MGA_SAVE_BACKUP_KEY)}
+            catch{await putAndVerifyRecord(db,MGA_SAVE_KEY,saved)}
+          });
+          log('Save da nuvem baixado para este dispositivo');
+        }catch(e){
+          log('Save da nuvem disponível; cache local não pôde ser atualizado ('+(e?.message||e)+')');
+        }
+      }else if(saved===backupSaved&&!isValidSavedRecord(localSaved)){
+        try{
+          await withProgressDb(db=>putAndVerifyRecord(db,MGA_SAVE_KEY,backupSaved));
+          log('Checkpoint local recuperado do backup');
+        }catch(e){
+          log('Backup válido em memória; não foi possível reparar o checkpoint principal ('+(e?.message||e)+')');
+        }
       }
       const ready=await waitForGameReady();
       if(!ready){

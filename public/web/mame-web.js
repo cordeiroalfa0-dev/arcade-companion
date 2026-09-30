@@ -235,7 +235,7 @@
     playerUrl.searchParams.set("name", cleanRomName(romName));
     // O player é alterado junto com o bridge; versionar a URL evita que o
     // navegador reutilize uma versão antiga da rotina de restauração.
-    playerUrl.searchParams.set("v", "20260929-game-manager-load-state-v1");
+    playerUrl.searchParams.set("v", "rolling-save-backup-20260929-v1");
     if (biosUrl) playerUrl.searchParams.set("bios", biosUrl);
     if (biosName) playerUrl.searchParams.set("biosName", biosName);
 
