@@ -235,7 +235,7 @@
     playerUrl.searchParams.set("name", cleanRomName(romName));
     // O player é alterado junto com o bridge; versionar a URL evita que o
     // navegador reutilize uma versão antiga da rotina de restauração.
-    playerUrl.searchParams.set("v", "save-confirmed-20260929-v2");
+    playerUrl.searchParams.set("v", "single-save-button-20260929-v3");
     if (biosUrl) playerUrl.searchParams.set("bios", biosUrl);
     if (biosName) playerUrl.searchParams.set("biosName", biosName);
 
