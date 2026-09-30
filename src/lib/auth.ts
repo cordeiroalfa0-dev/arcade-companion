@@ -61,14 +61,13 @@ export async function createSessionCookie(user: {
   };
   const body = b64urlEncode(new TextEncoder().encode(JSON.stringify(payload)));
   const sig = await hmacSign(body);
-  // O player roda em um iframe. SameSite=None permite o cookie nesse contexto
-  // quando o app está incorporado por um site de outra origem; Secure é
-  // obrigatório pelos navegadores modernos para aceitar SameSite=None.
-  return `${COOKIE_NAME}=${body}.${sig}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${MAX_AGE_SECONDS}`;
+  // O player usa um access token Bearer validado pelo Supabase; este cookie
+  // fica restrito ao fluxo legado e não precisa ser enviado como terceiro.
+  return `${COOKIE_NAME}=${body}.${sig}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${MAX_AGE_SECONDS}`;
 }
 
 export function clearSessionCookie(): string {
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0`;
+  return `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 
 export async function readSession(request: Request): Promise<SessionPayload | null> {
@@ -88,8 +87,7 @@ export async function readSession(request: Request): Promise<SessionPayload | nu
   }
 }
 
-// A sessão usa SameSite=None para suportar o player incorporado. Rejeitar
-// origens externas nas rotas mutáveis evita aceitar CSRF via cookie.
+// Rejeitar origens externas nas rotas mutáveis evita aceitar requisições CSRF.
 export function isSameOriginRequest(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return true;

@@ -1330,6 +1330,8 @@
     }catch{return null}
   };
   const cloudUrl=`/api/saves/?rom=${encodeURIComponent(romBase)}&core=${encodeURIComponent(core)}`;
+  let cloudAccessToken='';
+  const cloudAuthHeaders=()=>cloudAccessToken?{Authorization:`Bearer ${cloudAccessToken}`} : {};
   let cloudAvailable=null;
   let lastCloudSaveStatus='unknown';
   const syncCloudSave=async record=>{
@@ -1340,7 +1342,7 @@
       const controller=new AbortController();
       cloudTimeout=setTimeout(()=>controller.abort(),8000);
       const response=await fetch('/api/saves/',{
-        method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+        method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...cloudAuthHeaders()},
         signal:controller.signal,
         body:JSON.stringify({rom:romBase,core,stateB64:bytesToBase64(bytes),preview:record.preview||'',savedAt:record.savedAt,dateStr:record.dateStr})
       });
@@ -1364,7 +1366,7 @@
       // Uma API remota lenta não deve impedir a retomada do save local.
       const controller=new AbortController();
       cloudTimeout=setTimeout(()=>controller.abort(),6000);
-      const response=await fetch(cloudUrl,{credentials:'same-origin',signal:controller.signal});
+      const response=await fetch(cloudUrl,{credentials:'same-origin',headers:cloudAuthHeaders(),signal:controller.signal});
       if(response.status===401){cloudAvailable=false;return null}
       if(!response.ok){cloudAvailable=false;return null}
       const data=await response.json();
@@ -1725,6 +1727,11 @@
   };
   window.addEventListener('message',e=>{
     if(e.source!==window.parent||e.origin!==location.origin)return;
+    if(e.data?.type==='mga-set-cloud-access-token'){
+      const token=e.data.accessToken;
+      cloudAccessToken=typeof token==='string'&&token.length<=8192?token:'';
+      return;
+    }
     if(e.data?.type==='mga-request-save-exit')saveAndExit();
   });
 

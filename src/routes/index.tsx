@@ -29,9 +29,22 @@ export const Route = createFileRoute("/")({
 type AuthState = "checking" | "guest" | "authed";
 type MgaUser = { email: string; name?: string; picture?: string };
 
+function toMgaUser(user: { email?: string; user_metadata?: unknown }): MgaUser {
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const text = (value: unknown) => (typeof value === "string" ? value : undefined);
+  const name = text(metadata["full_name"]) || text(metadata["name"]);
+  const picture = text(metadata["avatar_url"]) || text(metadata["picture"]);
+  return {
+    email: user.email ?? "",
+    ...(name ? { name } : {}),
+    ...(picture ? { picture } : {}),
+  };
+}
+
 function Index() {
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [user, setUser] = useState<MgaUser | null>(null);
+  const [cloudAccessToken, setCloudAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     // A intro é a porta de entrada; o launcher só abre depois de pressionar Start.
@@ -41,30 +54,40 @@ function Index() {
     }
 
     let cancelled = false;
-    const refresh = async () => {
-      // Se voltou do login Google, troca a sessão da nuvem pelo cookie do app.
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        await fetch("/api/auth/session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ access_token: data.session.access_token }),
-        }).catch(() => {});
-      }
-      const res = await fetch("/api/auth/me").catch(() => null);
-      const me = res && res.ok ? await res.json() : null;
+    let authEventVersion = 0;
+    const applySession = (session: {
+      access_token: string;
+      user: { email?: string; user_metadata?: unknown };
+    }) => {
       if (cancelled) return;
-      if (me?.ok) {
-        setUser(me.user as MgaUser);
-        setAuthState("authed");
-      } else {
+      setCloudAccessToken(session.access_token);
+      setUser(toMgaUser(session.user));
+      setAuthState("authed");
+    };
+    const refresh = async () => {
+      const versionAtStart = authEventVersion;
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (data.session) {
+        applySession(data.session);
+        return;
+      }
+      if (versionAtStart !== authEventVersion) return;
+      setCloudAccessToken(null);
+      setUser(null);
+      setAuthState("guest");
+    };
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      authEventVersion++;
+      if (session) {
+        applySession(session);
+      } else if (event === "SIGNED_OUT") {
+        setCloudAccessToken(null);
+        setUser(null);
         setAuthState("guest");
       }
-    };
-    refresh();
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") refresh();
     });
+    refresh();
     return () => {
       cancelled = true;
       sub.subscription.unsubscribe();
@@ -82,15 +105,25 @@ function Index() {
   return (
     <Launcher
       user={user}
+      cloudAccessToken={cloudAccessToken}
       onLogout={() => {
         setUser(null);
+        setCloudAccessToken(null);
         setAuthState("guest");
       }}
     />
   );
 }
 
-function Launcher({ user, onLogout }: { user: MgaUser | null; onLogout: () => void }) {
+function Launcher({
+  user,
+  cloudAccessToken,
+  onLogout,
+}: {
+  user: MgaUser | null;
+  cloudAccessToken: string | null;
+  onLogout: () => void;
+}) {
   const logout = async () => {
     try {
       await supabase.auth.signOut();
@@ -143,5 +176,5 @@ function Launcher({ user, onLogout }: { user: MgaUser | null; onLogout: () => vo
   // Ela só usa o bridge local (public/mame-web.js) para abrir o jogo e
   // ler/gravar favoritos e recentes; não depende mais do bundle remoto
   // hospedado no repositório master-games-arcade-system.
-  return <GameLibrary accountSlot={accountBadge} />;
+  return <GameLibrary accountSlot={accountBadge} cloudAccessToken={cloudAccessToken} />;
 }

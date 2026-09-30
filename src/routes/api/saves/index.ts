@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { isSameOriginRequest, readSession } from "../../../lib/auth";
+import { isSameOriginRequest } from "../../../lib/auth";
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -17,8 +17,28 @@ async function admin() {
   return supabaseAdmin;
 }
 
+async function readSaveSession(request: Request) {
+  const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!token) return null;
+
+  try {
+    const db = await admin();
+    const { data, error } = await db.auth.getUser(token);
+    if (error || !data.user) return null;
+    return {
+      uid: data.user.id,
+      email: data.user.email ?? "",
+      name: "",
+      picture: "",
+      exp: 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function get({ request }: { request: Request }) {
-  const session = await readSession(request);
+  const session = await readSaveSession(request);
   if (!session) return json({ ok: false, error: "Não autenticado." }, 401);
 
   const url = new URL(request.url);
@@ -48,7 +68,7 @@ async function get({ request }: { request: Request }) {
 
 async function upsert({ request }: { request: Request }) {
   if (!isSameOriginRequest(request)) return json({ ok: false, error: "Origem inválida." }, 403);
-  const session = await readSession(request);
+  const session = await readSaveSession(request);
   if (!session) return json({ ok: false, error: "Não autenticado." }, 401);
 
   const body = await request.json().catch(() => null);
@@ -80,7 +100,7 @@ async function upsert({ request }: { request: Request }) {
 
 async function remove({ request }: { request: Request }) {
   if (!isSameOriginRequest(request)) return json({ ok: false, error: "Origem inválida." }, 403);
-  const session = await readSession(request);
+  const session = await readSaveSession(request);
   if (!session) return json({ ok: false, error: "Não autenticado." }, 401);
 
   const url = new URL(request.url);

@@ -230,12 +230,21 @@
     iframe.style.cssText =
       "position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;display:block;";
 
+    const sendCloudAccessToken = () => {
+      const accessToken = window.MGA_CLOUD_ACCESS_TOKEN;
+      iframe.contentWindow?.postMessage({
+        type: "mga-set-cloud-access-token",
+        accessToken: typeof accessToken === "string" ? accessToken : "",
+      }, location.origin);
+    };
+    window.addEventListener("mga-cloud-access-token-updated", sendCloudAccessToken);
+
     const playerUrl = new URL("/web/player.html", location.origin);
     playerUrl.searchParams.set("rom", romUrl);
     playerUrl.searchParams.set("name", cleanRomName(romName));
     // O player é alterado junto com o bridge; versionar a URL evita que o
     // navegador reutilize uma versão antiga que ainda exibia o menu RetroArch.
-    playerUrl.searchParams.set("v", "20260929-reliable-save-resume-v1");
+    playerUrl.searchParams.set("v", "20260930-cloud-bearer-v1");
     if (biosUrl) playerUrl.searchParams.set("bios", biosUrl);
     if (biosName) playerUrl.searchParams.set("biosName", biosName);
 
@@ -247,6 +256,7 @@
       closed = true;
       closeInProgress = false;
       window.removeEventListener("message", onMessage);
+      window.removeEventListener("mga-cloud-access-token-updated", sendCloudAccessToken);
       iframe.src = "about:blank";
       iframe.remove();
       overlay.remove();
@@ -369,6 +379,7 @@
     window.addEventListener("message", onMessage);
 
     iframe.onload = () => {
+      sendCloudAccessToken();
       // O player.html já exibe o estado de carregamento e o próprio botão
       // Start Game. Não mantenha a mensagem do launcher sobre o iframe,
       // pois ela pode esconder o botão que o usuário precisa clicar.
