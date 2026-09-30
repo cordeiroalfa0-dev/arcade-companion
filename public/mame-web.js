@@ -244,7 +244,7 @@
     playerUrl.searchParams.set("name", cleanRomName(romName));
     // O player é alterado junto com o bridge; versionar a URL evita que o
     // navegador reutilize uma versão antiga que ainda exibia o menu RetroArch.
-    playerUrl.searchParams.set("v", "20260930-cloud-bearer-v1");
+    playerUrl.searchParams.set("v", "20260930-cloud-token-early-v2");
     if (biosUrl) playerUrl.searchParams.set("bios", biosUrl);
     if (biosName) playerUrl.searchParams.set("biosName", biosName);
 
@@ -296,6 +296,11 @@
         event.origin !== location.origin ||
         event.source !== iframe.contentWindow
       ) return;
+
+      if (event.data?.type === "mga-request-cloud-access-token") {
+        sendCloudAccessToken();
+        return;
+      }
 
       if (event.data?.type === "mga-emulator-started") {
         message.remove();

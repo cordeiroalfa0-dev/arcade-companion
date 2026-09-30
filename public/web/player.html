@@ -554,6 +554,14 @@
 
 <script>
 (async()=>{
+  let cloudAccessToken='';
+  window.addEventListener('message',e=>{
+    if(e.source!==window.parent||e.origin!==location.origin)return;
+    if(e.data?.type!=='mga-set-cloud-access-token')return;
+    const token=e.data.accessToken;
+    cloudAccessToken=typeof token==='string'&&token.length<=8192?token:'';
+  });
+  window.parent.postMessage({type:'mga-request-cloud-access-token'},location.origin);
   try {
     if (screen.orientation?.lock) {
       screen.orientation.lock("landscape").catch(()=>{});
@@ -1330,7 +1338,6 @@
     }catch{return null}
   };
   const cloudUrl=`/api/saves/?rom=${encodeURIComponent(romBase)}&core=${encodeURIComponent(core)}`;
-  let cloudAccessToken='';
   const cloudAuthHeaders=()=>cloudAccessToken?{Authorization:`Bearer ${cloudAccessToken}`} : {};
   let cloudAvailable=null;
   let lastCloudSaveStatus='unknown';
@@ -1727,11 +1734,6 @@
   };
   window.addEventListener('message',e=>{
     if(e.source!==window.parent||e.origin!==location.origin)return;
-    if(e.data?.type==='mga-set-cloud-access-token'){
-      const token=e.data.accessToken;
-      cloudAccessToken=typeof token==='string'&&token.length<=8192?token:'';
-      return;
-    }
     if(e.data?.type==='mga-request-save-exit')saveAndExit();
   });
 

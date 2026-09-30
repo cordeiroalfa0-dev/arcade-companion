@@ -126,7 +126,7 @@ const prettyFallback = (name: string) =>
 async function waitForBridge(): Promise<void> {
   await new Promise<void>((resolve) => {
     const script = document.createElement("script");
-    script.src = "/web/mame-web.js?v=20260930-cloud-bearer-v1";
+    script.src = "/web/mame-web.js?v=20260930-cloud-token-early-v2";
     script.onload = () => resolve();
     script.onerror = () => resolve();
     document.head.appendChild(script);
