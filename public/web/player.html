@@ -1338,7 +1338,29 @@
     }catch{return null}
   };
   const cloudUrl=`/api/saves/?rom=${encodeURIComponent(romBase)}&core=${encodeURIComponent(core)}`;
-  const cloudAuthHeaders=()=>cloudAccessToken?{Authorization:`Bearer ${cloudAccessToken}`} : {};
+  // O login do site fica salvo neste mesmo endereço; lemos o token atual a cada
+  // chamada (ele é renovado pelo site), sem depender de uma resposta da página pai.
+  const readStoredAccessToken=()=>{
+    const scan=store=>{
+      try{
+        for(let i=0;i<store.length;i++){
+          const k=store.key(i);
+          if(!k||!/^sb-.+-auth-token$/.test(k))continue;
+          const v=JSON.parse(store.getItem(k)||'null');
+          const s=v?.access_token?v:(v?.currentSession||v?.session||null);
+          if(s?.access_token&&(!s.expires_at||s.expires_at*1000>Date.now()+5000))return s.access_token;
+        }
+      }catch{}
+      return '';
+    };
+    let t=scan(localStorage);
+    try{if(!t&&window.parent!==window)t=scan(window.parent.localStorage)}catch{}
+    return t;
+  };
+  const cloudAuthHeaders=()=>{
+    const token=readStoredAccessToken()||cloudAccessToken;
+    return token?{Authorization:`Bearer ${token}`}:{};
+  };
   let cloudAvailable=null;
   let lastCloudSaveStatus='unknown';
   const syncCloudSave=async record=>{
