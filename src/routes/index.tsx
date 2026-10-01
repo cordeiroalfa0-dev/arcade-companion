@@ -28,6 +28,24 @@ export const Route = createFileRoute("/")({
 
 type AuthState = "checking" | "guest" | "authed";
 type MgaUser = { email: string; name?: string; picture?: string };
+const AUTH_CHECK_TIMEOUT_MS = 5000;
+
+async function getSessionWithTimeout() {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      supabase.auth.getSession(),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("A verificação de sessão expirou.")),
+          AUTH_CHECK_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
 
 function toMgaUser(user: { email?: string; user_metadata?: unknown }): MgaUser {
   const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
@@ -64,33 +82,46 @@ function Index() {
       setUser(toMgaUser(session.user));
       setAuthState("authed");
     };
-    const refresh = async () => {
-      const versionAtStart = authEventVersion;
-      const { data } = await supabase.auth.getSession();
+    const setGuest = () => {
       if (cancelled) return;
-      if (data.session) {
-        applySession(data.session);
-        return;
-      }
-      if (versionAtStart !== authEventVersion) return;
       setCloudAccessToken(null);
       setUser(null);
       setAuthState("guest");
     };
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      authEventVersion++;
-      if (session) {
-        applySession(session);
-      } else if (event === "SIGNED_OUT") {
-        setCloudAccessToken(null);
-        setUser(null);
-        setAuthState("guest");
+    let sub: { subscription: { unsubscribe: () => void } } | null = null;
+    try {
+      sub = supabase.auth.onAuthStateChange((event, session) => {
+        authEventVersion++;
+        if (session) {
+          applySession(session);
+        } else if (event === "SIGNED_OUT") {
+          setGuest();
+        }
+      }).data;
+    } catch (error) {
+      console.error("Falha ao inicializar a autenticação; usando modo convidado.", error);
+      setGuest();
+    }
+    const refresh = async () => {
+      const versionAtStart = authEventVersion;
+      try {
+        const { data } = await getSessionWithTimeout();
+        if (cancelled) return;
+        if (data.session) {
+          applySession(data.session);
+          return;
+        }
+        if (versionAtStart !== authEventVersion) return;
+        setGuest();
+      } catch (error) {
+        console.warn("Sessão indisponível; continuando como convidado.", error);
+        setGuest();
       }
-    });
+    };
     refresh();
     return () => {
       cancelled = true;
-      sub.subscription.unsubscribe();
+      sub?.subscription.unsubscribe();
     };
   }, []);
 
