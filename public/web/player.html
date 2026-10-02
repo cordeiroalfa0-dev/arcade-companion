@@ -1366,17 +1366,36 @@
     try{
       const bytes=normalizeStateBytes(record?.state);
       if(!bytes){lastCloudSaveStatus='failed';return false}
+      const stateB64=bytesToBase64(bytes);
       const controller=new AbortController();
       cloudTimeout=setTimeout(()=>controller.abort(),8000);
       const response=await fetch('/api/saves/',{
-        method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...cloudAuthHeaders()},
+        method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json',...cloudAuthHeaders()},
         signal:controller.signal,
-        body:JSON.stringify({rom:romBase,core,stateB64:bytesToBase64(bytes),preview:record.preview||'',savedAt:record.savedAt,dateStr:record.dateStr})
+        body:JSON.stringify({rom:romBase,core,stateB64,preview:record.preview||'',savedAt:record.savedAt,dateStr:record.dateStr})
       });
-      if(response.status===401){cloudAvailable=false;lastCloudSaveStatus='local-only';return false}
-      cloudAvailable=true;
       const result=await response.json().catch(()=>null);
+      if(response.status===401){cloudAvailable=false;lastCloudSaveStatus='local-only';return false}
+      if(response.status===409&&result?.reason==='newer_remote'){
+        cloudAvailable=true;lastCloudSaveStatus='remote-newer';
+        log('Nuvem já possui um checkpoint mais novo; save local preservado');
+        return true;
+      }
       if(!response.ok||result?.ok!==true){lastCloudSaveStatus='failed';return false}
+      // Confirma a leitura do mesmo estado após o POST. Um 2xx isolado não
+      // garante que a versão correta ficou disponível para o próximo login.
+      const verified=await readCloudSave();
+      if(verified&&verified.savedAt>Number(record.savedAt)){
+        cloudAvailable=true;lastCloudSaveStatus='remote-newer';
+        log('Outro dispositivo gravou um checkpoint mais novo durante a sincronização');
+        return true;
+      }
+      if(!verified||verified.savedAt<Number(record.savedAt)||verified.stateB64!==stateB64){
+        cloudAvailable=false;lastCloudSaveStatus='failed';
+        log('Nuvem: escrita respondeu, mas a verificação não encontrou o mesmo checkpoint');
+        return false;
+      }
+      cloudAvailable=true;
       lastCloudSaveStatus='synced';
       log('Save sincronizado na nuvem');
       return true;
@@ -1393,15 +1412,15 @@
       // Uma API remota lenta não deve impedir a retomada do save local.
       const controller=new AbortController();
       cloudTimeout=setTimeout(()=>controller.abort(),6000);
-      const response=await fetch(cloudUrl,{credentials:'same-origin',headers:cloudAuthHeaders(),signal:controller.signal});
+      const response=await fetch(cloudUrl,{credentials:'same-origin',cache:'no-store',headers:{...cloudAuthHeaders(),'Cache-Control':'no-cache'},signal:controller.signal});
       if(response.status===401){cloudAvailable=false;return null}
       if(!response.ok){cloudAvailable=false;return null}
       const data=await response.json();
       const remote=data?.save;
       const state=base64ToBytes(remote?.stateB64);
-      if(!state)return null;
+      if(!state||!remote?.stateB64||remote.stateB64.length>8_000_000)return null;
       cloudAvailable=true;
-      return {state,stateSize:state.byteLength,savedAt:Number(remote.savedAt)||0,dateStr:remote.dateStr||'',preview:remote.preview||''};
+      return {state,stateB64:remote.stateB64,stateSize:state.byteLength,savedAt:Number(remote.savedAt)||0,dateStr:remote.dateStr||'',preview:remote.preview||''};
     }catch(e){
       cloudAvailable=false;
       log('Nuvem indisponível/timeout ao carregar; usando save local');
@@ -1745,6 +1764,8 @@
         cloudStatus,
         message:!ok?'Não foi possível confirmar o save local.':cloudStatus==='synced'
           ?'Save confirmado neste aparelho e na nuvem.'
+          :cloudStatus==='remote-newer'
+          ?'A nuvem já possui um checkpoint mais novo; ele foi preservado.'
           :'Save confirmado neste aparelho; sem nuvem. Não apague os dados do navegador.'
       },location.origin);
     }catch(e){
