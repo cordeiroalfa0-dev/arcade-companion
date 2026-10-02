@@ -71,6 +71,7 @@ function Index() {
       return;
     }
 
+    console.log("[auth] effect start");
     let cancelled = false;
     let authEventVersion = 0;
     const applySession = (session: {
@@ -83,6 +84,7 @@ function Index() {
       setAuthState("authed");
     };
     const setGuest = () => {
+      console.log("[auth] guest", cancelled);
       if (cancelled) return;
       setCloudAccessToken(null);
       setUser(null);
