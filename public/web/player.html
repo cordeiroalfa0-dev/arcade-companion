@@ -518,7 +518,7 @@
         <button id="mga-modal-close" class="mga-modal-close" type="button" aria-label="Fechar">✕</button>
       </div>
       <div class="mga-modal-actions">
-        <button id="mga-btn-return" class="mga-btn-action mga-btn-return" type="button">▶ Voltar à partida</button>
+        <button id="mga-btn-return" class="mga-btn-action mga-btn-return" type="button">▶ Retornar ao momento salvo</button>
         <button id="mga-btn-quick-save" class="mga-btn-action" type="button">📸 Salvar momento</button>
         <button id="mga-btn-quick-load" class="mga-btn-action" type="button">▶ Retornar ao momento</button>
         <span style="font-size:10px;color:#888;margin-left:auto;">Imagem e estado da partida salvos juntos</span>
@@ -586,7 +586,6 @@
   const earlySavesModal=document.getElementById('mga-saves-modal');
   const earlySavesButton=document.getElementById('btn-save');
   const earlySavesClose=document.getElementById('mga-modal-close');
-  const earlySavesReturn=document.getElementById('mga-btn-return');
   const earlyOpenSaves=()=>{
     if(!earlySavesModal)return;
     earlySavesModal.classList.add('open');
@@ -597,7 +596,6 @@
   const earlyCloseSaves=()=>earlySavesModal?.classList.remove('open');
   earlySavesButton?.addEventListener('click',earlyOpenSaves);
   earlySavesClose?.addEventListener('click',earlyCloseSaves);
-  earlySavesReturn?.addEventListener('click',earlyCloseSaves);
   earlySavesModal?.addEventListener('click',e=>{
     if(e.target===earlySavesModal)earlyCloseSaves();
   });
@@ -1868,7 +1866,8 @@
   const btnQuickLoad=document.getElementById('mga-btn-quick-load');
   const btnReturn=document.getElementById('mga-btn-return');
   const btnMobileQuickSave=document.getElementById('mga-mobile-quick-save');
-  if(btnReturn)btnReturn.addEventListener('click',closeSavesModal);
+  // O botão principal restaura o último checkpoint; não deve apenas fechar o modal.
+  if(btnReturn)btnReturn.addEventListener('click',()=>loadProgress(true));
 
   if(btnQuickSave)btnQuickSave.addEventListener('click',()=>saveWhenReady());
   if(btnQuickLoad)btnQuickLoad.addEventListener('click',()=>loadProgress(true));
