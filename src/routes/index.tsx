@@ -63,6 +63,14 @@ function Index() {
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [user, setUser] = useState<MgaUser | null>(null);
   const [cloudAccessToken, setCloudAccessToken] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+
+  // Rede de segurança: nunca deixa a tela presa em "Carregando...".
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("launcher") !== "1") return;
+    const t = setTimeout(() => setReady(true), 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     // A intro é a porta de entrada; o launcher só abre depois de pressionar Start.
@@ -125,7 +133,7 @@ function Index() {
     };
   }, []);
 
-  if (authState === "checking") {
+  if (authState === "checking" && !ready) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black text-sm text-cyan-400">
         Carregando...
