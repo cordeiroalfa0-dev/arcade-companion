@@ -1513,25 +1513,16 @@
           // Use a API oficial: além de gravar e carregar o arquivo, ela
           // cancela EJS.resetTimeout. Chamar functions.loadState diretamente
           // deixava o reset pendente sobrescrever o checkpoint recém-aplicado.
-          const wasPaused=!!emulator?.paused;
-          if(!wasPaused){
-            if(typeof emulator?.pause==='function')emulator.pause(true);
-            else manager.toggleMainLoop?.(0);
-            // Evita que um frame do core concorra com a escrita/leitura do
-            // estado nativo durante a restauração.
-            await mgaSleep(100);
-          }
+          // O core do RetroArch aplica o estado numa tarefa processada pelo
+          // loop principal: com o jogo pausado a carga ficava pendente e era
+          // perdida. Aplique com o jogo rodando (como o EmulatorJS original)
+          // e reaplique depois do boot do arcade para não voltar ao início.
+          resumeIfPaused();
           manager.clearEJSResetTimer?.();
           manager.loadState(bytes);
-          // load_state é síncrono, mas o próximo frame ainda pode aplicar o
-          // reset agendado por startGame. Dê tempo para a carga assentar e
-          // confirme que nenhum reset antigo ficou pendente antes de jogar.
-          await mgaSleep(250);
+          await mgaSleep(1200);
           manager.clearEJSResetTimer?.();
-          if(!wasPaused){
-            if(typeof emulator.play==='function')emulator.play(true);
-            else manager.toggleMainLoop?.(1);
-          }
+          manager.loadState(bytes);
           await mgaSleep(1500);
           log(`${label}: estado aplicado (tentativa ${attempt})`);
           return true;
