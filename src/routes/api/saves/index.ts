@@ -116,7 +116,9 @@ async function upsert({ request }: { request: Request }) {
   if (error) {
     // Compatibilidade temporária com ambientes que ainda não aplicaram a
     // migração da função atômica: valida antes e confirma depois do upsert.
-    if (error.code !== "42883") return json({ ok: false, error: error.message }, 500);
+    if (error.code !== "42883" && error.code !== "PGRST202") {
+      return json({ ok: false, error: error.message }, 500);
+    }
     const { data: current, error: readError } = await db
       .from("mga_saves")
       .select("saved_at")
