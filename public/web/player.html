@@ -1617,6 +1617,11 @@
   const saveProgress=async(silent=false)=>{
     const manager=window.EJS_emulator?.gameManager;
     if(!manager||!started||mgaLoadBusy)return false;
+    // Nunca salvar antes de a restauração inicial terminar: o auto-save
+    // (30s), visibilitychange ou pagehide podiam disparar nos primeiros
+    // segundos e gravar o jogo recém-aberto por cima do momento salvo,
+    // fazendo a partida reabrir sempre do zero.
+    if(!mgaInitialLoadStarted)return false;
     if(mgaSaveBusy){
       // visibilitychange e pagehide podem chegar quase juntos no celular.
       // Não descarte o segundo pedido: ele será executado assim que o save
