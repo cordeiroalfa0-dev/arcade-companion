@@ -8,6 +8,13 @@
       "when": 1790639294539,
       "tag": "0000_create_mga_saves",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791026544522,
+      "tag": "0001_mga_upsert_save_function",
+      "breakpoints": true
     }
   ]
 }

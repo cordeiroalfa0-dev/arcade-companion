@@ -49,7 +49,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      mga_upsert_save: {
+        Args: {
+          p_core: string
+          p_date_str: string
+          p_preview: string
+          p_rom: string
+          p_saved_at: number
+          p_state_b64: string
+          p_user_id: string
+        }
+        Returns: {
+          saved_at: number
+          stored: boolean
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
