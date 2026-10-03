@@ -97,7 +97,14 @@ async function upsert({ request }: { request: Request }) {
   }
 
   const db = await admin();
-  const { data: result, error } = await db.rpc("mga_upsert_save", {
+  type UpsertRpc = (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<{ stored?: boolean; saved_at?: number }> | null;
+    error: { code?: string; message: string } | null;
+  }>;
+  const { data: result, error } = await (db.rpc as unknown as UpsertRpc)("mga_upsert_save", {
     p_user_id: session.uid,
     p_rom: rom,
     p_core: core,
